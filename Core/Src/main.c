@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "ssd1306.h"
+#include "fonts.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -108,6 +109,29 @@ int main(void)
   // Encender el Emisor Láser (Poner PC2 en ALTO)
   // Si usaste la etiqueta:
   HAL_GPIO_WritePin(LASER_ON_GPIO_Port, LASER_ON_Pin, GPIO_PIN_SET);
+
+  // 1. Iniciar
+    ssd1306_Init();
+
+    // 2. Limpiar pantalla
+    ssd1306_Fill(Black);
+
+    // 3. Escribir texto
+    // En tu librería se usa 'SetCursor' en vez de 'GotoXY'
+    ssd1306_SetCursor(10, 10);
+
+    // En tu librería se usa 'WriteString' en vez de 'Puts'
+    ssd1306_WriteString("HOLA!!", Font_7x10, White);
+
+    ssd1306_SetCursor(10, 30);
+    ssd1306_WriteString("JUEGA AL...", Font_7x10, White);
+
+    ssd1306_SetCursor(10, 50);
+    ssd1306_WriteString("LABERINTO!!!", Font_7x10, White);
+
+    // 4. Actualizar pantalla
+    ssd1306_UpdateScreen();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -356,7 +380,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.ClockSpeed = 400000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
