@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "ssd1306.h"
 #include "fonts.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,11 +49,29 @@ I2C_HandleTypeDef hi2c1;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
+// --- VARIABLES DE HARDWARE ---
 uint32_t val_joyX = 0;
 uint32_t val_joyY = 0;
 uint32_t val_LDR_Inicio = 0;
 uint32_t val_LDR_Fin = 0;
-GPIO_PinState estadoLaser = GPIO_PIN_RESET; // Variable global para el láser
+uint32_t val_LDR_Perder = 0;  // <--- NUEVA (Sustituye a estadoLaser)
+
+// --- VARIABLES DEL JUEGO ---
+// Definimos los nombres de los estados
+typedef enum {
+    ESTADO_INTRO,       // Pantalla "EL LABERINTO"
+    ESTADO_SELECCION,   // Elegir "NORMAL" o "LOCO"
+    ESTADO_CUENTA,      // 3, 2, 1...
+    ESTADO_JUGANDO,     // Mover servos y leer sensores
+    ESTADO_GANADO,      // Pantalla Win
+    ESTADO_PERDIDO      // Pantalla Game Over
+} EstadoJuego;
+
+EstadoJuego estadoActual = ESTADO_INTRO; // Empezamos en la intro
+
+// Variables para el menú
+int opcionMenu = 0;     // 0 = Normal, 1 = Loco
+int modoJuego = 0;      // Guardará lo que hayamos elegido (0=Normal, 1=Loco)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,31 +125,14 @@ int main(void)
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3); // Arranca Servo X
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4); // Arranca Servo Y
   HAL_ADC_Start(&hadc1);
-  // Encender el Emisor Láser (Poner PC2 en ALTO)
-  // Si usaste la etiqueta:
+
+    // Encender el Emisor Láser
   HAL_GPIO_WritePin(LASER_ON_GPIO_Port, LASER_ON_Pin, GPIO_PIN_SET);
 
-  // 1. Iniciar
-    ssd1306_Init();
-
-    // 2. Limpiar pantalla
-    ssd1306_Fill(Black);
-
-    // 3. Escribir texto
-    // En tu librería se usa 'SetCursor' en vez de 'GotoXY'
-    ssd1306_SetCursor(10, 10);
-
-    // En tu librería se usa 'WriteString' en vez de 'Puts'
-    ssd1306_WriteString("HOLA!!", Font_7x10, White);
-
-    ssd1306_SetCursor(10, 30);
-    ssd1306_WriteString("JUEGA AL...", Font_7x10, White);
-
-    ssd1306_SetCursor(10, 50);
-    ssd1306_WriteString("LABERINTO!!!", Font_7x10, White);
-
-    // 4. Actualizar pantalla
-    ssd1306_UpdateScreen();
+    // Iniciar Pantalla
+  ssd1306_Init();
+  ssd1306_Fill(Black);
+  ssd1306_UpdateScreen();
 
   /* USER CODE END 2 */
 
@@ -141,100 +143,197 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // --- 1. Iniciar la secuencia de lecturas ---
-	  HAL_ADC_Start(&hadc1);
+	  switch (estadoActual) {
 
-	  // ==========================================
-	  // PASO 1: LEER JOYSTICK X (Rank 1)
-	  // ==========================================
-	  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-		  val_joyX = HAL_ADC_GetValue(&hadc1);
+	  // ============================================================
+	          // 1. PANTALLA DE TÍTULO (DISEÑO FINAL)
+	          // ============================================================
+	          case ESTADO_INTRO:
+	              ssd1306_Fill(Black);
 
-	      // Mover Servo X (PB0)
-	      // Mapeo: Joystick(0-4095) -> Servo(1100-1500)
-	      uint32_t pulsoX = 1100 + (val_joyX * 400) / 4095;
-	      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, pulsoX);
+	              // "EL" centrado arriba
+	              ssd1306_SetCursor(50, 5);
+	              ssd1306_WriteString("EL", Font_11x18, White);
+
+	              // "LABERINTO" centrado en medio
+	              ssd1306_SetCursor(15, 25);
+	              ssd1306_WriteString("LABERINTO", Font_11x18, White);
+
+	              // Instrucción abajo
+	              ssd1306_SetCursor(30, 50);
+	              ssd1306_WriteString("dale a OK", Font_7x10, White);
+
+	              ssd1306_UpdateScreen();
+
+	              // Esperar al Botón A (PD0) para empezar
+	              if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
+	                  estadoActual = ESTADO_SELECCION;
+	                  HAL_Delay(500); // Pequeña espera para no pulsar dos veces sin querer
+	              }
+	              break;
+
+
+		  // ============================================================
+		  // 2. SELECCIÓN DE NIVEL (Normal vs Loco)
+		  // ============================================================
+		  case ESTADO_SELECCION:
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(20, 5);
+			  ssd1306_WriteString("ELIGE MODO:", Font_7x10, White);
+
+			  ssd1306_SetCursor(30, 25);
+			  ssd1306_WriteString("NIVEL NORMAL", Font_7x10, White);
+
+			  ssd1306_SetCursor(30, 45);
+			  ssd1306_WriteString("NIVEL LOOOCO", Font_7x10, White);
+
+			  // Dibujar la flecha >
+			  if (opcionMenu == 0) {
+				  ssd1306_SetCursor(15, 25);
+				  ssd1306_WriteString(">", Font_7x10, White);
+			  } else {
+				  ssd1306_SetCursor(15, 45);
+				  ssd1306_WriteString(">", Font_7x10, White);
+			  }
+			  ssd1306_UpdateScreen();
+
+			  // Botones B (Arriba) y C (Abajo)
+			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1) == GPIO_PIN_RESET) opcionMenu = 0; // Normal
+			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2) == GPIO_PIN_RESET) opcionMenu = 1; // Loco
+
+			  // Botón A (Confirmar)
+			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
+				  modoJuego = opcionMenu; // Guardamos la elección (0 o 1)
+				  estadoActual = ESTADO_CUENTA;
+				  HAL_Delay(300);
+			  }
+			  break;
+
+
+		  // ============================================================
+		  // 3. CUENTA ATRÁS DRAMÁTICA
+		  // ============================================================
+		  case ESTADO_CUENTA:
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(40, 20);
+			  ssd1306_WriteString("3...", Font_16x26, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(800);
+
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(40, 20);
+			  ssd1306_WriteString("2...", Font_16x26, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(800);
+
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(40, 20);
+			  ssd1306_WriteString("1...", Font_16x26, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(800);
+
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(50, 5);
+			  ssd1306_WriteString("NO TE", Font_11x18, White);
+			  ssd1306_SetCursor(15, 25);
+			  ssd1306_WriteString("CAIGAAAAS!!!", Font_11x18, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(1000);
+
+			  estadoActual = ESTADO_JUGANDO;
+			  break;
+
+
+		  /// ============================================================
+		  // 4. JUEGO REAL (LÓGICA < 200)
+		  // ============================================================
+		  case ESTADO_JUGANDO:
+			  // --- 1. LEER LOS 5 CANALES DEL ADC EN ORDEN ---
+			  HAL_ADC_Start(&hadc1);
+			  // Leemos uno a uno
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_joyX = HAL_ADC_GetValue(&hadc1);
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_joyY = HAL_ADC_GetValue(&hadc1);
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Fin = HAL_ADC_GetValue(&hadc1);
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Perder = HAL_ADC_GetValue(&hadc1);
+			  HAL_ADC_Stop(&hadc1);
+
+
+			  // --- 2. COMPROBAR VICTORIA / DERROTA ---
+
+			  // A) META (Ganar) - Si baja de 200
+			  if (val_LDR_Fin < 200) {
+				  estadoActual = ESTADO_GANADO;
+			  }
+
+			  // B) TRAMPA (Perder)
+			  // AQUÍ ESTÁ TU CAMBIO: Si baja de 200 -> PIERDES
+			  if (val_LDR_Perder < 200) {
+				  estadoActual = ESTADO_PERDIDO;
+			  }
+
+			  // Botón D (Reset de emergencia)
+			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_3) == GPIO_PIN_RESET) {
+				   estadoActual = ESTADO_INTRO;
+				   HAL_Delay(500);
+			  }
+
+
+			  // --- 3. MOVER SERVOS (NORMAL vs LOCO) ---
+			  if (modoJuego == 1) {
+				  // MODO LOCO: Invertimos matemáticas (4095 - valor)
+				  val_joyX = 4095 - val_joyX;
+				  val_joyY = 4095 - val_joyY;
+			  }
+
+			  // Fórmulas ajustadas (1150 y 1090)
+			  uint32_t pulsoX = 1150 + (val_joyX * 400) / 4095;
+			  uint32_t pulsoY = 1090 + (val_joyY * 300) / 4095;
+
+			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, pulsoX);
+			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, pulsoY);
+
+			  break;
+
+		  // ============================================================
+		  // 5. FIN DEL JUEGO
+		  // ============================================================
+		  case ESTADO_GANADO:
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(10, 10);
+			  ssd1306_WriteString("VICTORIA!!", Font_11x18, White);
+
+			  ssd1306_SetCursor(30, 35);
+			  ssd1306_WriteString("Pulsa OK", Font_7x10, White);
+			  ssd1306_SetCursor(25, 48);
+			  ssd1306_WriteString("para Menu", Font_7x10, White);
+			  ssd1306_UpdateScreen();
+
+			  // Botón A para volver
+			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
+				  estadoActual = ESTADO_INTRO;
+				  HAL_Delay(500);
+			  }
+			  break;
+
+		  case ESTADO_PERDIDO:
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(15, 10);
+			  ssd1306_WriteString("GAME OVER", Font_11x18, White);
+
+			  ssd1306_SetCursor(15, 35);
+			  ssd1306_WriteString("Pulsa OK", Font_7x10, White);
+			  ssd1306_SetCursor(25, 48);
+			  ssd1306_WriteString("para Menu", Font_7x10, White);
+			  ssd1306_UpdateScreen();
+
+			  // Botón A para volver
+			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
+				  estadoActual = ESTADO_INTRO;
+				  HAL_Delay(500);
+			  }
+			  break;
 	  }
-
-	  // ==========================================
-	  // PASO 2: LEER JOYSTICK Y (Rank 2)
-	  // ==========================================
-	  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-		  val_joyY = HAL_ADC_GetValue(&hadc1);
-
-	      // Mover Servo Y (PB1)
-	      uint32_t pulsoY = 1100 + (val_joyY * 400) / 4095;
-	      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, pulsoY);
-	  }
-
-	  // ==========================================
-	  // PASO 3: LEER LDR INICIO (Rank 3 - PA4)
-	  // ==========================================
-	  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-		  val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
-
-	      // LOGICA DEL JUEGO:
-	      // Si el valor baja de 1000 (ejemplo), es que se ha cortado el haz de luz
-	      if (val_LDR_Inicio < 1000) {
-	          // ¡Aquí pondrías el código para EMPEZAR el cronómetro!
-	          // Por ahora encendemos un LED de la placa (Led Verde - PD12) si quieres
-	          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
-	      }
-	  }
-
-	  // ==========================================
-	  // PASO 4: LEER LDR FIN (Rank 4 - PC0)
-	  // ==========================================
-	  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-		  val_LDR_Fin = HAL_ADC_GetValue(&hadc1);
-
-	      // LOGICA DEL JUEGO:
-	      // Si se corta el haz del final
-	      if (val_LDR_Fin < 1000) {
-	          // ¡Aquí pondrías el código para PARAR el juego!
-	          // Encendemos el Led Rojo - PD14
-	          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-	      }
-	  }
-	  // Detenemos el ADC y esperamos un poco
-	  	  HAL_ADC_Stop(&hadc1);
-
-	  // ==========================================
-	  // PASO 5: LEER RECEPTOR LÁSER (Digital - PC1)
-	  // ==========================================
-	  // Leemos el estado del pin PC1 (0 o 1)
-	  GPIO_PinState estadoLaser = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
-
-	  // LÓGICA: Depende de tu módulo, puede dar '1' cuando recibe luz y '0' cuando no, o al revés.
-	  // Probemos esta lógica primero:
-	  if (estadoLaser == GPIO_PIN_RESET) // Si lee '0' (Asumimos que '0' es haz roto)
-	  {
-	      // ¡Haz roto! Encender LED Rojo de la placa (PD14)
-	      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-	  }
-	  else
-	  {
-	      // Haz OK. Apagar LED Rojo
-	      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-	  }
-
-	  // LEER RECEPTOR LÁSER
-	   // Guardamos el estado (0 o 1) en la variable global
-	   estadoLaser = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
-
-	   // Lógica para encender el LED de la placa si se corta el haz
-	   if (estadoLaser == GPIO_PIN_RESET)
-	   {
-	       HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET); // LED Rojo ON
-	   }
-	   else
-	   {
-	       HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET); // LED Rojo OFF
-	   }
-
-
-	  HAL_Delay(20); // Tu espera del final
-
   }
   /* USER CODE END 3 */
 }
@@ -314,7 +413,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.NbrOfConversion = 5;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -358,8 +457,24 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN ADC1_Init 2 */
 
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = 5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = 5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END ADC1_Init 2 */
 
 }
