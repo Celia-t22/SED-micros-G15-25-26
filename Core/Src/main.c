@@ -82,7 +82,6 @@ static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -123,6 +122,9 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1390);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 1220);
+  HAL_Delay(100);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3); // Arranca Servo X
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4); // Arranca Servo Y
   HAL_ADC_Start(&hadc1);
@@ -230,7 +232,8 @@ int main(void)
 			  HAL_ADC_Start(&hadc1);
 			  HAL_ADC_PollForConversion(&hadc1, 10);
 			  HAL_ADC_PollForConversion(&hadc1, 10);
-			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
+
+if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
 			  HAL_ADC_Stop(&hadc1);
 			  if(val_LDR_Inicio  < 200){
 			  estadoActual=ESTADO_CUENTA;
@@ -315,8 +318,8 @@ int main(void)
 			  }
 
 			  // Fórmulas ajustadas (1150 y 1090)
-			  uint32_t pulsoX = 1150 + (val_joyX * 400) / 4095;
-			  uint32_t pulsoY = 1090 + (val_joyY * 300) / 4095;
+			  uint32_t pulsoX = 1120 + (val_joyX * 390) / 4095;
+			  uint32_t pulsoY = 1100 + ((4095-val_joyY) * 290) / 4095;
 
 			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, pulsoX);
 			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, pulsoY);
