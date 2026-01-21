@@ -59,10 +59,6 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LASER_RX_Pin GPIO_PIN_1
-#define LASER_RX_GPIO_Port GPIOC
-#define LASER_ON_Pin GPIO_PIN_2
-#define LASER_ON_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 
