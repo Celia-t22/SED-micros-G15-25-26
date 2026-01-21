@@ -217,7 +217,8 @@ int main(void)
 
 		  case ESTADO_PREPARACION:
 			  ssd1306_Fill(Black);
-			  ssd1306_SetCursor(50, 5);			  ssd1306_WriteString("PON LA", Font_16x26, White);
+			  ssd1306_SetCursor(30, 5);
+			  ssd1306_WriteString("PONER", Font_16x26, White);
 			  ssd1306_UpdateScreen();
 			  HAL_Delay(800);
 
@@ -227,8 +228,11 @@ int main(void)
 			  ssd1306_UpdateScreen();
 			  HAL_Delay(800);
 			  HAL_ADC_Start(&hadc1);
+			  HAL_ADC_PollForConversion(&hadc1, 10);
+			  HAL_ADC_PollForConversion(&hadc1, 10);
 			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
-		  if(val_LDR_Inicio > 400){
+			  HAL_ADC_Stop(&hadc1);
+			  if(val_LDR_Inicio  < 200){
 			  estadoActual=ESTADO_CUENTA;
 			 HAL_Delay(3000);
 		  }
