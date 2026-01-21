@@ -61,6 +61,7 @@ uint32_t val_LDR_Perder = 0;  // <--- NUEVA (Sustituye a estadoLaser)
 typedef enum {
     ESTADO_INTRO,       // Pantalla "EL LABERINTO"
     ESTADO_SELECCION,   // Elegir "NORMAL" o "LOCO"
+	ESTADO_PREPARACION,// AVISA QUE SE PONGA LA PELOTA Y NO EMPIZA LA CUENTA ATRÁS HASTA QUE LA DETECTE
     ESTADO_CUENTA,      // 3, 2, 1...
     ESTADO_JUGANDO,     // Mover servos y leer sensores
     ESTADO_GANADO,      // Pantalla Win
@@ -204,12 +205,35 @@ int main(void)
 			  // Botón A (Confirmar)
 			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
 				  modoJuego = opcionMenu; // Guardamos la elección (0 o 1)
-				  estadoActual = ESTADO_CUENTA;
+				  estadoActual = ESTADO_PREPARACION;
 				  HAL_Delay(300);
 			  }
 			  break;
 
 
+     	  // ============================================================
+		 // 3.1. PREPARACIÓN
+		 // ============================================================
+
+		  case ESTADO_PREPARACION:
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(50, 5);			  ssd1306_WriteString("PON LA", Font_16x26, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(800);
+
+			  ssd1306_Fill(Black);
+			  ssd1306_SetCursor(15, 25);
+			  ssd1306_WriteString("PELOTA", Font_16x26, White);
+			  ssd1306_UpdateScreen();
+			  HAL_Delay(800);
+			  HAL_ADC_Start(&hadc1);
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
+		  if(val_LDR_Inicio > 400){
+			  estadoActual=ESTADO_CUENTA;
+			 HAL_Delay(3000);
+		  }
+		  HAL_ADC_Stop(&hadc1);
+		  break;
 		  // ============================================================
 		  // 3. CUENTA ATRÁS DRAMÁTICA
 		  // ============================================================
