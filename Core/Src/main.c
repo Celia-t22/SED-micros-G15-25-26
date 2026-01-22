@@ -54,14 +54,15 @@ uint32_t val_joyX = 0;
 uint32_t val_joyY = 0;
 uint32_t val_LDR_Inicio = 0;
 uint32_t val_LDR_Fin = 0;
-uint32_t val_LDR_Perder = 0;  // <--- NUEVA (Sustituye a estadoLaser)
+uint32_t val_LDR_Perder = 0;
+volatile uint8_t flag_reset = 0; //Para la interrupción
 
 // --- VARIABLES DEL JUEGO ---
 // Definimos los nombres de los estados
 typedef enum {
     ESTADO_INTRO,       // Pantalla "EL LABERINTO"
     ESTADO_SELECCION,   // Elegir "NORMAL" o "LOCO"
-	ESTADO_PREPARACION,// AVISA QUE SE PONGA LA PELOTA Y NO EMPIZA LA CUENTA ATRÁS HASTA QUE LA DETECTE
+	ESTADO_PREPARACION, // AVISA QUE SE PONGA LA PELOTA Y NO EMPIZA LA CUENTA ATRÁS HASTA QUE LA DETECTE
     ESTADO_CUENTA,      // 3, 2, 1...
     ESTADO_JUGANDO,     // Mover servos y leer sensores
     ESTADO_GANADO,      // Pantalla Win
@@ -86,6 +87,13 @@ static void MX_TIM3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == GPIO_PIN_3) // PD3
+  {
+    flag_reset = 1;
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -122,15 +130,14 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+  /*
+  //Se ha metido en el estado de inicio, porque tiene mas sentido
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1390);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 1220);
-  HAL_Delay(100);
+  HAL_Delay(100);*/
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3); // Arranca Servo X
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4); // Arranca Servo Y
   HAL_ADC_Start(&hadc1);
-
-    // Encender el Emisor Láser
-  //HAL_GPIO_WritePin(LASER_ON_GPIO_Port, LASER_ON_Pin, GPIO_PIN_SET);
 
     // Iniciar Pantalla
   ssd1306_Init();
@@ -146,34 +153,49 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  //RESETEO DEL PROGRAMA
+	 if (flag_reset)
+	  	  {
+	 	  	  flag_reset = 0;
+	 	  	  estadoActual = ESTADO_INTRO;
+	 	  	  opcionMenu = 0;
+	 	  	  modoJuego = 0;
+	 	  	  HAL_Delay(500);
+	 	  	  continue;
+	 	  }
 	  switch (estadoActual) {
 
-	  // ============================================================
-	          // 1. PANTALLA DE TÍTULO (DISEÑO FINAL)
-	          // ============================================================
-	          case ESTADO_INTRO:
-	              ssd1306_Fill(Black);
+	      // ============================================================
+	      // 1. PANTALLA DE TÍTULO (DISEÑO FINAL)
+	      // ============================================================
+	      case ESTADO_INTRO:
+	           ssd1306_Fill(Black);
 
-	              // "EL" centrado arriba
-	              ssd1306_SetCursor(50, 5);
-	              ssd1306_WriteString("EL", Font_11x18, White);
+	           //Centrar motores
+	           __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1390);
+	           __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 1220);
+	           HAL_Delay(100);
 
-	              // "LABERINTO" centrado en medio
-	              ssd1306_SetCursor(15, 25);
-	              ssd1306_WriteString("LABERINTO", Font_11x18, White);
+	           // "EL" centrado arriba
+	           ssd1306_SetCursor(50, 5);
+	           ssd1306_WriteString("EL", Font_11x18, White);
 
-	              // Instrucción abajo
-	              ssd1306_SetCursor(30, 50);
-	              ssd1306_WriteString("dale a OK", Font_7x10, White);
+	           // "LABERINTO" centrado en medio
+	           ssd1306_SetCursor(15, 25);
+	           ssd1306_WriteString("LABERINTO", Font_11x18, White);
 
-	              ssd1306_UpdateScreen();
+	           // Instrucción abajo
+	           ssd1306_SetCursor(30, 50);
+	           ssd1306_WriteString("dale a OK", Font_7x10, White);
 
-	              // Esperar al Botón A (PD0) para empezar
-	              if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
-	                  estadoActual = ESTADO_SELECCION;
-	                  HAL_Delay(500); // Pequeña espera para no pulsar dos veces sin querer
-	              }
-	              break;
+	           ssd1306_UpdateScreen();
+
+	           // Esperar al Botón A (PD0) para empezar
+	           if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0) == GPIO_PIN_RESET) {
+	                estadoActual = ESTADO_SELECCION;
+	                HAL_Delay(500); // Pequeña espera para no pulsar dos veces sin querer
+	           }
+	           break;
 
 
 		  // ============================================================
@@ -213,7 +235,7 @@ int main(void)
 			  break;
 
 
-     	  // ============================================================
+     	 // ============================================================
 		 // 3.1. PREPARACIÓN
 		 // ============================================================
 
@@ -233,14 +255,14 @@ int main(void)
 			  HAL_ADC_PollForConversion(&hadc1, 10);
 			  HAL_ADC_PollForConversion(&hadc1, 10);
 
-if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
+			  if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_GetValue(&hadc1);
 			  HAL_ADC_Stop(&hadc1);
 			  if(val_LDR_Inicio  < 200){
 			  estadoActual=ESTADO_CUENTA;
-			 HAL_Delay(3000);
-		  }
-		  HAL_ADC_Stop(&hadc1);
-		  break;
+			  HAL_Delay(3000);
+			  }
+			  HAL_ADC_Stop(&hadc1);
+			  break;
 		  // ============================================================
 		  // 3. CUENTA ATRÁS DRAMÁTICA
 		  // ============================================================
@@ -292,23 +314,13 @@ if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_G
 
 			  // --- 2. COMPROBAR VICTORIA / DERROTA ---
 
-			  // A) META (Ganar) - Si baja de 200
 			  if (val_LDR_Fin < 200) {
 				  estadoActual = ESTADO_GANADO;
 			  }
 
-			  // B) TRAMPA (Perder)
-			  // AQUÍ ESTÁ TU CAMBIO: Si baja de 200 -> PIERDES
 			  if (val_LDR_Perder < 200) {
 				  estadoActual = ESTADO_PERDIDO;
 			  }
-
-			  // Botón D (Reset de emergencia)
-			  if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_3) == GPIO_PIN_RESET) {
-				   estadoActual = ESTADO_INTRO;
-				   HAL_Delay(500);
-			  }
-
 
 			  // --- 3. MOVER SERVOS (NORMAL vs LOCO) ---
 			  if (modoJuego == 1) {
@@ -317,7 +329,7 @@ if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) val_LDR_Inicio = HAL_ADC_G
 				  val_joyY = 4095 - val_joyY;
 			  }
 
-			  // Fórmulas ajustadas (1150 y 1090)
+			  // Movimiento de los servos segun el joystick
 			  uint32_t pulsoX = 1120 + (val_joyX * 390) / 4095;
 			  uint32_t pulsoY = 1100 + ((4095-val_joyY) * 290) / 4095;
 
